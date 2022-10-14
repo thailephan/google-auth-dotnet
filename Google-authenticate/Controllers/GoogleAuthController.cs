@@ -45,42 +45,10 @@ namespace Google_authenticate.Controllers
     public class GoogleAuthController : ControllerBase
     {
         private readonly ILogger<GoogleAuthController> _logger;
-        GoogleAuthorizationCodeFlow _flow;
-        string[] Scopes = {
-            CalendarService.Scope.CalendarEvents,
-            CalendarService.Scope.Calendar,
-        };
-        // const string userId = "1";
-        // const string authorizationCode = "4/0ARtbsJpJt11ziXd_nSQl8GskSVfJV5iRFLEVcSkw1vVic39OhgILPpDkWy3GNikdN6pBVw";
-        const string credPath = "token.json";
 
         public GoogleAuthController(ILogger<GoogleAuthController> logger)
         {
             _logger = logger;
-
-            //* Way 1 *//
-            // Load client secrets.
-            using (var stream =
-                   new FileStream("credentials.json", FileMode.Open, FileAccess.Read))
-            {
-                /* The file token.json stores the user's access and refresh tokens, and is created
-                 automatically when the authorization flow completes for the first time. */
-                _flow = new GoogleAuthorizationCodeFlow(new GoogleAuthorizationCodeFlow.Initializer
-                {
-                    ClientSecrets = GoogleClientSecrets.FromStream(stream).Secrets,
-                    Scopes = Scopes,
-                    DataStore = new FileDataStore(credPath, true)
-                //  DataStore = new FileDataStore("Store")
-                });
-            }
-
-            //* End way 1 *//
-
-            //* Way 2 *//
-            // Token not auto refresh
-            // GoogleCredential cred = GoogleCredential.FromAccessToken("ya29.a0Aa4xrXMwYuGv6ZsWBLNum1E6abGLuPzqlI2de5oJg1Kwj77BaWyjZR-wdB1KnqWuAG1YMcImAbINtKM31KfQmK00XwYdKwcdT8-dx77dOMlSoEnqrbaajePC_T-LAWvn8f-KirGjIsP4O3bPKGrXQLI2Pp8BUP6j_a8oLAaCgYKATASAQ8SFQEjDvL9qOL0w_hpvpQGJFnx3YcIEQ0173");
-            // _service = new CalendarService(new BaseClientService.Initializer {HttpClientInitializer = cred});
-            //* End way 2 *//
         }
 
         [HttpGet(Name = "GetGoogleAuth")]
@@ -94,22 +62,18 @@ namespace Google_authenticate.Controllers
         }
 
         [HttpPost(Name = "PostGoogleAuth")]
-        async public Task<ObjectResult> AuthWithGoogle([FromBody]GoogleAuth auth) {
-            // Refer to the .NET quickstart on how to setup the environment:
-            // https://developers.google.com/calendar/quickstart/dotnet
-            // Change the scope to CalendarService.Scope.Calendar and delete any stored
-            // credentials.
+        async public Task<ActionResult> AuthWithGoogle([FromBody]GoogleAuth auth) {
+            if (auth.Id == null) {
+                return NotFound("Thieu id user");
+            }
             if (auth.Code == null) {
                 return NotFound("Thieu code");
             }
-            UserCredential _credential;
-
-            FileDataStore fileStore = new FileDataStore(credPath, true);
-            TokenResponse token = await fileStore.GetAsync<TokenResponse>(auth.Id);
-
+            GoogleAuthorizationCodeFlow flow = Common.Common.flow;
+            TokenResponse token = await flow.LoadTokenAsync(auth.Id, CancellationToken.None);
             if (token == null) {
                 // token data does not exist for this user
-                token = await _flow.ExchangeCodeForTokenAsync(
+                token = await flow.ExchangeCodeForTokenAsync(
                 auth.Id, // user for tracking the userId on our backend system
                 auth.Code,
                 // Just be one in redirects url not need to be the same as from client's redirect uri
@@ -117,61 +81,13 @@ namespace Google_authenticate.Controllers
                 CancellationToken.None);
             }
 
+            //  Store to persistent storage
             using (System.IO.StreamWriter file = new System.IO.StreamWriter(new FileStream("user-google.txt", FileMode.Append)))
             {
                 file.WriteLine(auth.Id + "|" + token.RefreshToken + "|" + token.AccessToken + "|" + auth.Hd);
             }
 
-            _credential = new UserCredential(_flow, auth.Id, token); 
-
-            // Load client secrets.
-            CalendarService _service = new CalendarService(new BaseClientService.Initializer
-            {
-                HttpClientInitializer = _credential,
-            });
-            Event newEvent = new Event() {
-                Summary = "11 Maysoft festival day",
-                Description = "11 Maysoft festival day",
-                Start = new EventDateTime()
-                {
-                    DateTime = DateTime.Parse("2022-12-08T14:00:00+07:00"),
-                    TimeZone = "Asia/Ho_Chi_Minh",
-                },
-                End = new EventDateTime()
-                {
-                    DateTime = DateTime.Parse("2022-12-08T16:00:00+07:00"),
-                    TimeZone = "Asia/Ho_Chi_Minh",
-                },
-                Recurrence = new String[] { "RRULE:FREQ=WEEKLY;UNTIL=20221231T000000Z;BYDAY=TU,TH,SA" },
-                Attendees = new EventAttendee[] {
-                    new EventAttendee() { Email = "jpett612@gmail.com" },
-                },
-                // Reminders = new Event.RemindersData() {
-                //     UseDefault = false,
-                //     Overrides = new EventReminder[] {
-                //         new EventReminder() { Method = "email", Minutes = 24 * 60 },
-                //         new EventReminder() { Method = "sms", Minutes = 10 },
-                //     }
-                // }
-            };
-
-            String calendarId = "primary";
-            EventsResource.InsertRequest insertRequest = _service.Events.Insert(newEvent, calendarId);
-            Event createdEvent = insertRequest.Execute();
-
-            EventsResource.PatchRequest patchRequest = _service.Events.Patch(new Event {
-                ConferenceData = new ConferenceData {
-                    CreateRequest = new CreateConferenceRequest {
-                        RequestId = "a",
-                    },
-                },
-            }, calendarId, createdEvent.Id);
-            patchRequest.SendUpdates = EventsResource.PatchRequest.SendUpdatesEnum.All;
-            patchRequest.ConferenceDataVersion = 1;
-
-            Event patchedEvent = patchRequest.Execute();
-
-            return Ok(patchedEvent);
+            return Ok();
         }
     }
 }

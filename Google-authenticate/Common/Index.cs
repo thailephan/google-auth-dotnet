@@ -7,7 +7,7 @@ using Google.Apis.Calendar.v3;
 
 namespace Google_authenticate.Common {
     public class Common {
-        static GoogleAuthorizationCodeFlow flow = Common.GetAuthorizationCodeFlow();
+        public static GoogleAuthorizationCodeFlow flow = Common.GetAuthorizationCodeFlow();
         public static GoogleAuthorizationCodeFlow GetAuthorizationCodeFlow() {
             GoogleAuthorizationCodeFlow _flow;
             string[] Scopes = {
@@ -40,6 +40,14 @@ namespace Google_authenticate.Common {
             });
 
             return _service;
+        }
+
+        public static DateTime TimeStampToDateTime(long unixTimeStamp)
+        {
+            // Unix timestamp is seconds past epoch
+            DateTime dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
+            dtDateTime = dtDateTime.AddSeconds(unixTimeStamp + 25200).ToLocalTime();
+            return dtDateTime;
         }
     }
 }
